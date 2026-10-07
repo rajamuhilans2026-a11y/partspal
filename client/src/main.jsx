@@ -318,7 +318,12 @@ function IssueManager({ onInventoryChange }) {
   const [kits, setKits] = useState([]);
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [issuesLoading, setIssuesLoading] = useState(true);
+  const [issueRefreshToken, setIssueRefreshToken] = useState(0);
+  const [issueStatus, setIssueStatus] = useState('all');
+  const [memberSearch, setMemberSearch] = useState('');
   const [loadError, setLoadError] = useState('');
+  const [issuesError, setIssuesError] = useState('');
   const [formError, setFormError] = useState('');
   const [feedback, setFeedback] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -335,11 +340,10 @@ function IssueManager({ onInventoryChange }) {
 
   useEffect(() => {
     let active = true;
-    Promise.all([apiRequest('/api/inventory'), apiRequest('/api/issues'), apiRequest('/api/kits')])
-      .then(([inventoryData, issueData, kitData]) => {
+    Promise.all([apiRequest('/api/inventory'), apiRequest('/api/kits')])
+      .then(([inventoryData, kitData]) => {
         if (!active) return;
         setParts(inventoryData.items);
-        setIssues(issueData.issues);
         setKits(kitData.kits);
         setLoadError('');
       })
@@ -354,6 +358,34 @@ function IssueManager({ onInventoryChange }) {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      const params = new URLSearchParams({ status: issueStatus });
+      if (memberSearch.trim()) params.set('search', memberSearch.trim());
+      setIssuesLoading(true);
+      setIssuesError('');
+      apiRequest(`/api/issues?${params.toString()}`)
+        .then((data) => {
+          if (!Array.isArray(data.issues)) {
+            throw new Error('The issue response was not in the expected format.');
+          }
+          if (active) setIssues(data.issues);
+        })
+        .catch((requestError) => {
+          if (active) setIssuesError(requestError.message || 'Could not load member checkouts.');
+        })
+        .finally(() => {
+          if (active) setIssuesLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [issueStatus, memberSearch, issueRefreshToken]);
 
   const selectedPart = parts.find((part) => part.id === form.partId);
   const selectedKit = kits.find((kit) => kit.id === form.kitId);
@@ -391,7 +423,6 @@ function IssueManager({ onInventoryChange }) {
             : { partId: form.partId, quantity: Number(form.quantity) }),
         }),
       });
-      setIssues((current) => [data.issue, ...current]);
       setParts((current) => current.map((part) => (
         data.issue.components.some((component) => component.partId === part.id)
           ? {
@@ -413,6 +444,7 @@ function IssueManager({ onInventoryChange }) {
       }));
       setFeedback({ type: 'success', message: data.message });
       onInventoryChange();
+      setIssueRefreshToken((current) => current + 1);
     } catch (requestError) {
       setFormError(requestError.message || 'Could not issue this part.');
     } finally {
@@ -428,7 +460,6 @@ function IssueManager({ onInventoryChange }) {
       const data = await apiRequest(`/api/issues/${encodeURIComponent(issue.id)}/return`, {
         method: 'PATCH',
       });
-      setIssues((current) => current.map((item) => item.id === issue.id ? data.issue : item));
       setParts((current) => current.map((part) => (
         data.issue.components.some((component) => component.partId === part.id)
           ? {
@@ -441,6 +472,7 @@ function IssueManager({ onInventoryChange }) {
       )));
       setFeedback({ type: 'success', message: data.message });
       onInventoryChange();
+      setIssueRefreshToken((current) => current + 1);
     } catch (requestError) {
       setFormError(requestError.message || 'Could not return this issue.');
     } finally {
@@ -457,7 +489,7 @@ function IssueManager({ onInventoryChange }) {
           <p className="mt-1 text-sm text-muted">Check parts out to members and record them back in.</p>
         </div>
         <span className="rounded-full border border-line bg-white px-3 py-1.5 text-xs font-medium text-muted">
-          {activeCount} active {activeCount === 1 ? 'issue' : 'issues'}
+          {activeCount} active {activeCount === 1 ? 'issue' : 'issues'} shown
         </span>
       </div>
 
@@ -602,7 +634,7 @@ function IssueManager({ onInventoryChange }) {
             </label>
             <button
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-forest px-4 text-sm font-semibold text-white transition hover:bg-green disabled:cursor-not-allowed disabled:opacity-55"
-              disabled={busy || loading || (issueType === 'part' ? availableParts.length === 0 : !selectedKit)}
+              disabled={busy || loading || issuesLoading || (issueType === 'part' ? availableParts.length === 0 : !selectedKit)}
               type="submit"
             >
               {busy ? 'Issuing…' : issueType === 'kit' ? 'Issue kit' : 'Issue part'}
@@ -614,19 +646,51 @@ function IssueManager({ onInventoryChange }) {
         <section className="overflow-hidden rounded-2xl border border-line bg-white shadow-card" aria-labelledby="current-issues-heading">
           <div className="flex items-center justify-between gap-3 p-5 sm:px-6 sm:py-5">
             <div>
-              <h3 id="current-issues-heading" className="font-display text-base font-bold">Checkout history</h3>
-              <p className="mt-1 text-xs text-muted">Track member checkouts and record returns.</p>
+              <h3 id="current-issues-heading" className="font-display text-base font-bold">Who has what</h3>
+              <p className="mt-1 text-xs text-muted">Find member checkouts, due dates, and returns.</p>
             </div>
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-lime/25 text-green"><Icon name="return" className="h-[18px] w-[18px]" /></span>
           </div>
-          {loading ? (
+          <div className="grid gap-2 border-y border-line bg-soft/50 p-4 sm:grid-cols-[minmax(0,1fr)_150px] sm:px-6">
+            <label className="relative block">
+              <span className="sr-only">Search issues by member name or registration number</span>
+              <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                className="h-10 w-full rounded-lg border border-line bg-white pl-9 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-green focus:ring-2 focus:ring-green/10"
+                maxLength={100}
+                onChange={(event) => setMemberSearch(event.target.value)}
+                placeholder="Find a member or registration no."
+                type="search"
+                value={memberSearch}
+              />
+            </label>
+            <label className="block">
+              <span className="sr-only">Filter checkout status</span>
+              <select
+                className="h-10 w-full rounded-lg border border-line bg-white px-3 text-sm outline-none focus:border-green focus:ring-2 focus:ring-green/10"
+                onChange={(event) => setIssueStatus(event.target.value)}
+                value={issueStatus}
+              >
+                <option value="all">All issues</option>
+                <option value="active">Active</option>
+                <option value="overdue">Overdue</option>
+                <option value="returned">Returned</option>
+              </select>
+            </label>
+          </div>
+          {issuesError && (
+            <div className="m-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:mx-6" role="alert">
+              Unable to load checkouts: {issuesError}
+            </div>
+          )}
+          {loading || issuesLoading ? (
             <div className="grid min-h-44 place-items-center text-sm text-muted" role="status">Loading checkouts…</div>
           ) : issues.length === 0 ? (
             <div className="grid min-h-44 place-items-center px-5 text-center">
               <div>
                 <span className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-soft text-muted"><Icon name="issues" /></span>
-                <p className="mt-3 text-sm font-semibold">No checkouts yet</p>
-                <p className="mt-1 text-xs text-muted">Issued parts will appear here.</p>
+                <p className="mt-3 text-sm font-semibold">{memberSearch.trim() || issueStatus !== 'all' ? 'No matching checkouts' : 'No checkouts yet'}</p>
+                <p className="mt-1 text-xs text-muted">{memberSearch.trim() || issueStatus !== 'all' ? 'Try another member name, registration number, or status.' : 'Issued parts and kits will appear here.'}</p>
               </div>
             </div>
           ) : (
@@ -651,8 +715,8 @@ function IssueManager({ onInventoryChange }) {
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-3 pl-12 sm:justify-end sm:pl-0">
-                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${issue.status === 'active' ? 'bg-amber-50 text-amber-700' : 'bg-green/10 text-green'}`}>
-                      {issue.status === 'active' ? 'Checked out' : 'Returned'}
+                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${issue.isOverdue ? 'bg-rose-50 text-rose-700' : issue.status === 'active' ? 'bg-amber-50 text-amber-700' : 'bg-green/10 text-green'}`}>
+                      {issue.isOverdue ? 'Overdue' : issue.status === 'active' ? 'Checked out' : 'Returned'}
                     </span>
                     {issue.status === 'active' && (
                       <button

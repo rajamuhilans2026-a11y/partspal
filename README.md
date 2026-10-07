@@ -38,7 +38,8 @@ After the first deploy, copy the Netlify site origin into Render's `CLIENT_ORIGI
 - Individual part checkout and return with server-side validation
 - Line Follower Kit checkout that validates all component stock before changing any count
 - Kit returns that restore all components once
-- Checkout records with member name, registration number, part, quantity, and due date
+- Searchable member checkout view with active, returned, and overdue filters
+- Checkout records with member name, registration number, part/kit contents, quantity, and due date
 - Express readiness endpoint at `GET /api/health`
 
-Inventory, kit definitions, and checkout records use in-memory starter data in `server/index.js`. Issues, returns, and stock changes reset whenever the backend process restarts or is redeployed. Member and overdue views are the next milestone; the Recharts category chart remains deferred until required workflows are complete.
+Inventory, kit definitions, and checkout records use in-memory starter data in `server/index.js`. Issues, returns, and stock changes reset whenever the backend process restarts or is redeployed. Overdue status compares date-only due dates against the current UTC date so the API and interface use a consistent calendar day. The Recharts category chart remains deferred until required workflows are complete.

@@ -34,6 +34,14 @@ const kits = [
 ];
 const issues = [];
 
+function todayUtcDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isOverdue(issue, today = todayUtcDate()) {
+  return issue.status === 'active' && issue.dueDate < today;
+}
+
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || '*' }));
 app.use(express.json({ limit: '16kb' }));
 
@@ -81,8 +89,37 @@ app.get('/api/inventory', (request, response) => {
   });
 });
 
-app.get('/api/issues', (_request, response) => {
-  response.json({ issues: [...issues].reverse() });
+app.get('/api/issues', (request, response) => {
+  const { status = 'all', search = '' } = request.query;
+  const allowedStatuses = ['all', 'active', 'returned', 'overdue'];
+
+  if (typeof status !== 'string' || !allowedStatuses.includes(status)) {
+    return response.status(400).json({
+      error: 'Status must be one of: all, active, returned, overdue.',
+    });
+  }
+  if (typeof search !== 'string' || search.length > 100) {
+    return response.status(400).json({ error: 'Search must be a string of at most 100 characters.' });
+  }
+
+  const today = todayUtcDate();
+  const normalizedSearch = search.trim().toLocaleLowerCase();
+  const filteredIssues = issues.filter((issue) => {
+    const overdue = isOverdue(issue, today);
+    const matchesStatus = status === 'all'
+      || (status === 'overdue' ? overdue : issue.status === status);
+    const matchesMember = !normalizedSearch
+      || issue.memberName.toLocaleLowerCase().includes(normalizedSearch)
+      || issue.registrationNumber.toLocaleLowerCase().includes(normalizedSearch);
+    return matchesStatus && matchesMember;
+  });
+
+  response.json({
+    issues: filteredIssues
+      .map((issue) => ({ ...issue, isOverdue: isOverdue(issue, today) }))
+      .reverse(),
+    today,
+  });
 });
 
 app.get('/api/kits', (_request, response) => {
