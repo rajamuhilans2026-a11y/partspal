@@ -40,6 +40,7 @@ After the first deploy, copy the Netlify site origin into Render's `CLIENT_ORIGI
 - Kit returns that restore all components once
 - Searchable member checkout view with active, returned, and overdue filters
 - Checkout records with member name, registration number, part/kit contents, quantity, and due date
+- Responsive Recharts comparison of total and available stock by category
 - Express readiness endpoint at `GET /api/health`
 
-Inventory, kit definitions, and checkout records use in-memory starter data in `server/index.js`. Issues, returns, and stock changes reset whenever the backend process restarts or is redeployed. Overdue status compares date-only due dates against the current UTC date so the API and interface use a consistent calendar day. The Recharts category chart remains deferred until required workflows are complete.
+Inventory, kit definitions, and checkout records use in-memory starter data in `server/index.js`. Issues, returns, and stock changes reset whenever the backend process restarts or is redeployed. Overdue status compares date-only due dates against the current UTC date so the API and interface use a consistent calendar day. The chart's accessible data table shows the same live category totals as its bars.

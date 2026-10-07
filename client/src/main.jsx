@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
+
+const CategoryStockChart = lazy(() => import('./CategoryStockChart.jsx'));
 
 const navigation = [
   { label: 'Overview', icon: 'overview' },
@@ -173,9 +175,7 @@ function InventoryTable({ items }) {
 function InventoryPage({ refreshToken }) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All categories');
-  const [inventory, setInventory] = useState(null);
-  const [summary, setSummary] = useState(null);
-  const [categories, setCategories] = useState([]);
+  const [inventoryData, setInventoryData] = useState(null);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
 
@@ -194,15 +194,13 @@ function InventoryPage({ refreshToken }) {
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
-        if (!Array.isArray(data.items) || !Array.isArray(data.categories) || !data.summary) {
+        if (!Array.isArray(data.items) || !Array.isArray(data.categories) || !Array.isArray(data.categoryStock) || !data.summary) {
           throw new Error('The inventory response was not in the expected format.');
         }
         return data;
       })
       .then((data) => {
-        setInventory(data.items);
-        setCategories(data.categories);
-        setSummary(data.summary);
+        setInventoryData(data);
         setStatus('ready');
       })
       .catch((requestError) => {
@@ -233,16 +231,25 @@ function InventoryPage({ refreshToken }) {
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <SummaryCard label="Part types" value={summary?.partTypes ?? '—'} note="Unique components tracked" icon="box" />
-        <SummaryCard label="Total stock" value={summary?.totalStock ?? '—'} note="Units owned by the lab" icon="layers" tone="lime" />
-        <SummaryCard label="Available now" value={summary?.availableStock ?? '—'} note="Ready to issue to members" icon="inventory" />
+        <SummaryCard label="Part types" value={inventoryData?.summary.partTypes ?? '—'} note="Unique components tracked" icon="box" />
+        <SummaryCard label="Total stock" value={inventoryData?.summary.totalStock ?? '—'} note="Units owned by the lab" icon="layers" tone="lime" />
+        <SummaryCard label="Available now" value={inventoryData?.summary.availableStock ?? '—'} note="Ready to issue to members" icon="inventory" />
       </div>
+
+      <Suspense fallback={(
+        <section aria-labelledby="stock-chart-heading" className="mb-6 rounded-2xl border border-line bg-white p-5 shadow-card sm:p-6">
+          <h2 id="stock-chart-heading" className="font-display text-base font-bold">Stock by category</h2>
+          <div className="grid h-[260px] place-items-center text-sm text-muted" role="status">Loading chart…</div>
+        </section>
+      )}>
+        <CategoryStockChart data={inventoryData?.categoryStock ?? []} status={status} error={error} />
+      </Suspense>
 
       <section aria-labelledby="inventory-heading" className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-4 p-5 sm:px-6 sm:py-5">
           <div>
             <h2 id="inventory-heading" className="font-display text-base font-bold">All parts</h2>
-            <p className="mt-1 text-xs text-muted">{inventory ? `${inventory.length} ${inventory.length === 1 ? 'part' : 'parts'} shown` : 'Loading inventory records'}</p>
+            <p className="mt-1 text-xs text-muted">{inventoryData ? `${inventoryData.items.length} ${inventoryData.items.length === 1 ? 'part' : 'parts'} shown` : 'Loading inventory records'}</p>
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <label className="relative block sm:w-56">
@@ -266,7 +273,7 @@ function InventoryPage({ refreshToken }) {
                 value={category}
               >
                 <option>All categories</option>
-                {categories.map((value) => <option key={value}>{value}</option>)}
+                {inventoryData?.categories.map((value) => <option key={value}>{value}</option>)}
               </select>
             </label>
           </div>
@@ -279,10 +286,12 @@ function InventoryPage({ refreshToken }) {
           </div>
         )}
 
-        {inventory === null ? (
-          <div className="grid min-h-64 place-items-center text-sm text-muted" role="status">Loading parts…</div>
+        {inventoryData === null ? (
+          <div className="grid min-h-64 place-items-center px-5 text-center text-sm text-muted" role={status === 'error' ? 'alert' : 'status'}>
+            {status === 'error' ? `Unable to load inventory: ${error}` : 'Loading parts…'}
+          </div>
         ) : (
-          <InventoryTable items={inventory} />
+          <InventoryTable items={inventoryData.items} />
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-soft/50 px-5 py-3.5 text-xs text-muted sm:px-6">

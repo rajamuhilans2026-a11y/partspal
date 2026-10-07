@@ -78,9 +78,22 @@ app.get('/api/inventory', (request, response) => {
     return matchesSearch && matchesCategory;
   });
 
+  const categoryStock = [...inventory.reduce((totals, part) => {
+    const current = totals.get(part.category) ?? {
+      category: part.category,
+      totalStock: 0,
+      availableStock: 0,
+    };
+    current.totalStock += part.totalStock;
+    current.availableStock += part.availableStock;
+    totals.set(part.category, current);
+    return totals;
+  }, new Map()).values()].sort((left, right) => left.category.localeCompare(right.category));
+
   response.json({
     items,
     categories,
+    categoryStock,
     summary: {
       partTypes: inventory.length,
       totalStock: inventory.reduce((total, part) => total + part.totalStock, 0),
