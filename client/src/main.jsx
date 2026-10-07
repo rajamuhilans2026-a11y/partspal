@@ -5,7 +5,7 @@ import './style.css';
 const navigation = [
   { label: 'Overview', icon: 'overview' },
   { label: 'Inventory', icon: 'inventory', active: true },
-  { label: 'Issues & kits', icon: 'issues', upcoming: true },
+  { label: 'Issues & kits', icon: 'issues' },
   { label: 'Members', icon: 'members', upcoming: true },
 ];
 
@@ -293,7 +293,7 @@ function InventoryPage({ refreshToken }) {
 
       <footer className="mt-8 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
         <span>PartsPal · Robotics Club, VIT Chennai</span>
-        <span>Inventory · Milestone 02 / 06</span>
+        <span>Core workflows · Milestone 04 / 06</span>
       </footer>
     </>
   );
@@ -315,6 +315,7 @@ function displayDate(value) {
 
 function IssueManager({ onInventoryChange }) {
   const [parts, setParts] = useState([]);
+  const [kits, setKits] = useState([]);
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -322,21 +323,24 @@ function IssueManager({ onInventoryChange }) {
   const [feedback, setFeedback] = useState(null);
   const [busy, setBusy] = useState(false);
   const [returningId, setReturningId] = useState('');
+  const [issueType, setIssueType] = useState('part');
   const [form, setForm] = useState({
     memberName: '',
     registrationNumber: '',
     dueDate: localDateAfter(7),
     partId: '',
+    kitId: '',
     quantity: '1',
   });
 
   useEffect(() => {
     let active = true;
-    Promise.all([apiRequest('/api/inventory'), apiRequest('/api/issues')])
-      .then(([inventoryData, issueData]) => {
+    Promise.all([apiRequest('/api/inventory'), apiRequest('/api/issues'), apiRequest('/api/kits')])
+      .then(([inventoryData, issueData, kitData]) => {
         if (!active) return;
         setParts(inventoryData.items);
         setIssues(issueData.issues);
+        setKits(kitData.kits);
         setLoadError('');
       })
       .catch((requestError) => {
@@ -352,6 +356,13 @@ function IssueManager({ onInventoryChange }) {
   }, []);
 
   const selectedPart = parts.find((part) => part.id === form.partId);
+  const selectedKit = kits.find((kit) => kit.id === form.kitId);
+  const kitComponents = selectedKit?.components.map((component) => ({
+    ...component,
+    available: (parts.find((part) => part.id === component.partId)?.availableStock ?? 0),
+  })) ?? [];
+  const selectedKitAvailable = kitComponents.length > 0
+    && kitComponents.every((component) => component.available >= component.quantity);
   const availableParts = parts.filter((part) => part.availableStock > 0);
   const activeCount = issues.filter((issue) => issue.status === 'active').length;
 
@@ -372,14 +383,23 @@ function IssueManager({ onInventoryChange }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...form,
-          quantity: Number(form.quantity),
+          memberName: form.memberName,
+          registrationNumber: form.registrationNumber,
+          dueDate: form.dueDate,
+          ...(issueType === 'kit'
+            ? { kitId: form.kitId }
+            : { partId: form.partId, quantity: Number(form.quantity) }),
         }),
       });
       setIssues((current) => [data.issue, ...current]);
       setParts((current) => current.map((part) => (
-        part.id === data.issue.partId
-          ? { ...part, availableStock: part.availableStock - data.issue.quantity }
+        data.issue.components.some((component) => component.partId === part.id)
+          ? {
+            ...part,
+            availableStock: part.availableStock - data.issue.components
+              .filter((component) => component.partId === part.id)
+              .reduce((total, component) => total + component.quantity, 0),
+          }
           : part
       )));
       setForm((current) => ({
@@ -387,6 +407,8 @@ function IssueManager({ onInventoryChange }) {
         memberName: '',
         registrationNumber: '',
         dueDate: localDateAfter(7),
+        partId: '',
+        kitId: '',
         quantity: '1',
       }));
       setFeedback({ type: 'success', message: data.message });
@@ -408,8 +430,13 @@ function IssueManager({ onInventoryChange }) {
       });
       setIssues((current) => current.map((item) => item.id === issue.id ? data.issue : item));
       setParts((current) => current.map((part) => (
-        part.id === issue.partId
-          ? { ...part, availableStock: part.availableStock + issue.quantity }
+        data.issue.components.some((component) => component.partId === part.id)
+          ? {
+            ...part,
+            availableStock: part.availableStock + data.issue.components
+              .filter((component) => component.partId === part.id)
+              .reduce((total, component) => total + component.quantity, 0),
+          }
           : part
       )));
       setFeedback({ type: 'success', message: data.message });
@@ -445,10 +472,27 @@ function IssueManager({ onInventoryChange }) {
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(300px,.8fr)_minmax(0,1.5fr)]">
         <form className="rounded-2xl border border-line bg-white p-5 shadow-card sm:p-6" onSubmit={submitIssue}>
           <div className="mb-5">
-            <h3 className="font-display text-base font-bold">Issue a part</h3>
-            <p className="mt-1 text-xs text-muted">Member and checkout details are required.</p>
+            <h3 className="font-display text-base font-bold">Issue inventory</h3>
+            <p className="mt-1 text-xs text-muted">Check out a single part or an assembled kit.</p>
           </div>
           <div className="space-y-4">
+            <div aria-label="Issue type" className="grid grid-cols-2 rounded-lg bg-soft p-1" role="group">
+              {['part', 'kit'].map((type) => (
+                <button
+                  aria-pressed={issueType === type}
+                  className={`rounded-md px-3 py-2 text-xs font-semibold capitalize transition ${issueType === type ? 'bg-white text-forest shadow-sm' : 'text-muted hover:text-ink'}`}
+                  key={type}
+                  onClick={() => {
+                    setIssueType(type);
+                    setFormError('');
+                    setFeedback(null);
+                  }}
+                  type="button"
+                >
+                  {type === 'part' ? 'Individual part' : 'Kit'}
+                </button>
+              ))}
+            </div>
             <label className="block text-xs font-semibold text-ink">
               Member name
               <input
@@ -476,36 +520,75 @@ function IssueManager({ onInventoryChange }) {
                 value={form.registrationNumber}
               />
             </label>
-            <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-3">
-              <label className="block min-w-0 text-xs font-semibold text-ink">
-                Part
+            {issueType === 'part' ? (
+              <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-3">
+                <label className="block min-w-0 text-xs font-semibold text-ink">
+                  Part
+                  <select
+                    className="mt-1.5 h-10 w-full rounded-lg border border-line bg-white px-3 text-sm font-normal outline-none focus:border-green focus:ring-2 focus:ring-green/10"
+                    onChange={(event) => updateForm('partId', event.target.value)}
+                    required
+                    value={form.partId}
+                  >
+                    <option value="">Choose a part</option>
+                    {parts.map((part) => (
+                      <option disabled={part.availableStock === 0} key={part.id} value={part.id}>
+                        {part.name} · {part.availableStock} available
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-xs font-semibold text-ink">
+                  Quantity
+                  <input
+                    className="mt-1.5 h-10 w-full rounded-lg border border-line px-3 text-sm font-normal outline-none focus:border-green focus:ring-2 focus:ring-green/10"
+                    max={selectedPart?.availableStock || undefined}
+                    min="1"
+                    onChange={(event) => updateForm('quantity', event.target.value)}
+                    required
+                    type="number"
+                    value={form.quantity}
+                  />
+                </label>
+              </div>
+            ) : (
+              <>
+                <label className="block text-xs font-semibold text-ink">
+                  Robotics kit
                 <select
                   className="mt-1.5 h-10 w-full rounded-lg border border-line bg-white px-3 text-sm font-normal outline-none focus:border-green focus:ring-2 focus:ring-green/10"
-                  onChange={(event) => updateForm('partId', event.target.value)}
+                  onChange={(event) => updateForm('kitId', event.target.value)}
                   required
-                  value={form.partId}
+                  value={form.kitId}
                 >
-                  <option value="">Choose a part</option>
-                  {parts.map((part) => (
-                    <option disabled={part.availableStock === 0} key={part.id} value={part.id}>
-                      {part.name} · {part.availableStock} available
+                  <option value="">Choose a kit</option>
+                  {kits.map((kit) => (
+                    <option key={kit.id} value={kit.id}>
+                      {kit.name}
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="block text-xs font-semibold text-ink">
-                Quantity
-                <input
-                  className="mt-1.5 h-10 w-full rounded-lg border border-line px-3 text-sm font-normal outline-none focus:border-green focus:ring-2 focus:ring-green/10"
-                  max={selectedPart?.availableStock || undefined}
-                  min="1"
-                  onChange={(event) => updateForm('quantity', event.target.value)}
-                  required
-                  type="number"
-                  value={form.quantity}
-                />
-              </label>
-            </div>
+                </label>
+                {selectedKit && (
+                  <div className="rounded-lg border border-line bg-soft/60 p-3">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[.12em] text-muted">Kit contents</p>
+                    <ul className="space-y-2">
+                      {kitComponents.map((component) => (
+                        <li className="flex items-center justify-between gap-2 text-xs" key={component.partId}>
+                          <span className="font-medium text-ink">{component.partName}<span className="ml-1.5 text-muted">× {component.quantity}</span></span>
+                          <span className={`whitespace-nowrap ${component.available < component.quantity ? 'font-semibold text-rose-700' : 'text-muted'}`}>
+                            {component.available} available
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    {!selectedKitAvailable && (
+                      <p className="mt-2 border-t border-line pt-2 text-[11px] font-medium text-rose-700">One or more parts are unavailable. This kit cannot be issued.</p>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
             <label className="block text-xs font-semibold text-ink">
               Due date
               <input
@@ -519,12 +602,12 @@ function IssueManager({ onInventoryChange }) {
             </label>
             <button
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-forest px-4 text-sm font-semibold text-white transition hover:bg-green disabled:cursor-not-allowed disabled:opacity-55"
-              disabled={busy || loading || availableParts.length === 0}
+              disabled={busy || loading || (issueType === 'part' ? availableParts.length === 0 : !selectedKit)}
               type="submit"
             >
-              {busy ? 'Issuing…' : 'Issue part'}
+              {busy ? 'Issuing…' : issueType === 'kit' ? 'Issue kit' : 'Issue part'}
             </button>
-            {availableParts.length === 0 && !loading && <p className="text-center text-xs text-amber-700">No parts are currently available to issue.</p>}
+            {issueType === 'part' && availableParts.length === 0 && !loading && <p className="text-center text-xs text-amber-700">No parts are currently available to issue.</p>}
           </div>
         </form>
 
@@ -554,7 +637,16 @@ function IssueManager({ onInventoryChange }) {
                     <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-soft text-green"><Icon name="box" className="h-[18px] w-[18px]" /></span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">{issue.memberName}<span className="ml-2 font-normal text-muted">{issue.registrationNumber}</span></p>
-                      <p className="mt-1 text-xs text-ink">{issue.quantity} × {issue.partName}</p>
+                      {issue.type === 'kit' ? (
+                        <div className="mt-1">
+                          <p className="text-xs font-medium text-ink">{issue.kitName}</p>
+                          <p className="mt-1 text-[11px] leading-5 text-muted">
+                            {issue.components.map((component) => `${component.quantity} × ${component.partName}`).join(' · ')}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-xs text-ink">{issue.quantity} × {issue.partName}</p>
+                      )}
                       <p className="mt-1 text-[11px] text-muted">Due {displayDate(issue.dueDate)}</p>
                     </div>
                   </div>

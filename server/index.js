@@ -20,6 +20,18 @@ const inventory = [
   { id: 'chassis-2wd', name: '2WD Robot Chassis', category: 'Chassis & Hardware', totalStock: 7, availableStock: 7 },
   { id: 'jumper-wire-kit', name: 'Jumper Wire Kit', category: 'Chassis & Hardware', totalStock: 15, availableStock: 15 },
 ];
+const kits = [
+  {
+    id: 'line-follower-kit',
+    name: 'Line Follower Kit',
+    description: 'Everything needed to build a basic line-following robot.',
+    components: [
+      { partId: 'arduino-uno', quantity: 1 },
+      { partId: 'ir-sensor', quantity: 2 },
+      { partId: 'motor-driver-l298n', quantity: 1 },
+    ],
+  },
+];
 const issues = [];
 
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || '*' }));
@@ -73,8 +85,24 @@ app.get('/api/issues', (_request, response) => {
   response.json({ issues: [...issues].reverse() });
 });
 
+app.get('/api/kits', (_request, response) => {
+  const responseKits = kits.map((kit) => ({
+    ...kit,
+    components: kit.components.map((component) => {
+      const part = inventory.find((item) => item.id === component.partId);
+      return {
+        ...component,
+        partName: part?.name ?? 'Unknown part',
+        availableStock: part?.availableStock ?? 0,
+      };
+    }),
+  }));
+  response.json({ kits: responseKits });
+});
+
 app.post('/api/issues', (request, response) => {
-  const { memberName, registrationNumber, dueDate, partId, quantity } = request.body ?? {};
+  const { memberName, registrationNumber, dueDate, partId, kitId, quantity } = request.body ?? {};
+  const isKit = kitId !== undefined;
   const errors = {};
 
   if (typeof memberName !== 'string' || memberName.trim().length < 2 || memberName.trim().length > 80) {
@@ -97,46 +125,105 @@ app.post('/api/issues', (request, response) => {
     errors.dueDate = 'Choose a valid due date that is today or later.';
   }
 
-  if (typeof partId !== 'string' || partId.trim().length === 0) {
-    errors.partId = 'Choose a part to issue.';
-  }
-
-  if (!Number.isSafeInteger(quantity) || quantity <= 0) {
-    errors.quantity = 'Quantity must be a positive whole number.';
+  if (isKit) {
+    if (typeof kitId !== 'string' || kitId.trim().length === 0) {
+      errors.kitId = 'Choose a kit to issue.';
+    }
+    if (partId !== undefined) {
+      errors.kitId = 'Choose either an individual part or a kit, not both.';
+    }
+  } else {
+    if (typeof partId !== 'string' || partId.trim().length === 0) {
+      errors.partId = 'Choose a part to issue.';
+    }
+    if (!Number.isSafeInteger(quantity) || quantity <= 0) {
+      errors.quantity = 'Quantity must be a positive whole number.';
+    }
   }
 
   if (Object.keys(errors).length > 0) {
     return response.status(400).json({ error: 'Check the issue details and try again.', details: errors });
   }
 
-  const part = inventory.find((item) => item.id === partId);
-  if (!part) {
-    return response.status(404).json({ error: 'The selected part does not exist.' });
-  }
-
-  if (quantity > part.availableStock) {
-    return response.status(409).json({
-      error: `Only ${part.availableStock} ${part.name} ${part.availableStock === 1 ? 'unit is' : 'units are'} available.`,
+  let components;
+  let kit;
+  if (isKit) {
+    kit = kits.find((item) => item.id === kitId);
+    if (!kit) {
+      return response.status(404).json({ error: 'The selected kit does not exist.' });
+    }
+    components = kit.components.map((component) => {
+      const part = inventory.find((item) => item.id === component.partId);
+      return part ? {
+        partId: part.id,
+        partName: part.name,
+        quantity: component.quantity,
+        part,
+      } : null;
     });
+    if (components.some((component) => component === null)) {
+      console.error(`Kit ${kit.id} references a part missing from inventory.`);
+      return response.status(500).json({ error: 'This kit is misconfigured. Contact a lab administrator.' });
+    }
+    const unavailable = components.filter((component) => component.part.availableStock < component.quantity);
+    if (unavailable.length > 0) {
+      const shortages = unavailable.map((component) => {
+        const available = component.part.availableStock;
+        return `${component.partName}: needs ${component.quantity}, only ${available} available`;
+      });
+      return response.status(409).json({
+        error: `Cannot issue ${kit.name}. ${shortages.join('; ')}. No stock was changed.`,
+      });
+    }
+  } else {
+    const part = inventory.find((item) => item.id === partId);
+    if (!part) {
+      return response.status(404).json({ error: 'The selected part does not exist.' });
+    }
+
+    if (quantity > part.availableStock) {
+      return response.status(409).json({
+        error: `Only ${part.availableStock} ${part.name} ${part.availableStock === 1 ? 'unit is' : 'units are'} available.`,
+      });
+    }
+    components = [{
+      partId: part.id,
+      partName: part.name,
+      quantity,
+      part,
+    }];
   }
 
   const issue = {
     id: randomUUID(),
+    type: isKit ? 'kit' : 'part',
     memberName: memberName.trim(),
     registrationNumber: registrationNumber.trim().toUpperCase(),
     dueDate,
-    partId: part.id,
-    partName: part.name,
-    quantity,
+    partId: isKit ? null : components[0].partId,
+    partName: isKit ? kit.name : components[0].partName,
+    quantity: isKit ? 1 : components[0].quantity,
+    kitId: isKit ? kit.id : null,
+    kitName: isKit ? kit.name : null,
+    components: components.map(({ partId: componentPartId, partName, quantity: componentQuantity }) => ({
+      partId: componentPartId,
+      partName,
+      quantity: componentQuantity,
+    })),
     issuedAt: new Date().toISOString(),
     returnedAt: null,
     status: 'active',
   };
 
-  part.availableStock -= quantity;
+  components.forEach((component) => {
+    component.part.availableStock -= component.quantity;
+  });
   issues.push(issue);
 
-  return response.status(201).json({ issue, message: `${quantity} ${part.name} ${quantity === 1 ? 'issued' : 'units issued'} to ${issue.memberName}.` });
+  const message = isKit
+    ? `${kit.name} issued to ${issue.memberName}.`
+    : `${quantity} ${components[0].partName} ${quantity === 1 ? 'issued' : 'units issued'} to ${issue.memberName}.`;
+  return response.status(201).json({ issue, message });
 });
 
 app.patch('/api/issues/:id/return', (request, response) => {
@@ -148,17 +235,38 @@ app.patch('/api/issues/:id/return', (request, response) => {
     return response.status(409).json({ error: 'This issue has already been returned.' });
   }
 
-  const part = inventory.find((item) => item.id === issue.partId);
-  if (!part) {
-    console.error(`Cannot return issue ${issue.id}: inventory part ${issue.partId} no longer exists.`);
-    return response.status(500).json({ error: 'The issued part is missing from inventory. Contact a lab administrator.' });
+  const components = issue.components ?? [{
+    partId: issue.partId,
+    partName: issue.partName,
+    quantity: issue.quantity,
+  }];
+  const returnParts = components.map((component) => ({
+    component,
+    part: inventory.find((item) => item.id === component.partId),
+  }));
+  const missingPart = returnParts.find(({ part }) => !part);
+  if (missingPart) {
+    console.error(`Cannot return issue ${issue.id}: inventory part ${missingPart.component.partId} no longer exists.`);
+    return response.status(500).json({ error: 'An issued part is missing from inventory. Contact a lab administrator.' });
+  }
+  const exceedsTotal = returnParts.find(({ component, part }) => part.availableStock + component.quantity > part.totalStock);
+  if (exceedsTotal) {
+    console.error(`Cannot return issue ${issue.id}: returning ${exceedsTotal.component.partName} would exceed its total stock.`);
+    return response.status(500).json({ error: 'Returning this issue would exceed recorded stock. Contact a lab administrator.' });
   }
 
-  part.availableStock += issue.quantity;
+  returnParts.forEach(({ component, part }) => {
+    part.availableStock += component.quantity;
+  });
   issue.status = 'returned';
   issue.returnedAt = new Date().toISOString();
 
-  return response.json({ issue, message: `${issue.partName} returned by ${issue.memberName}.` });
+  return response.json({
+    issue,
+    message: issue.type === 'kit'
+      ? `${issue.kitName} returned by ${issue.memberName}.`
+      : `${issue.partName} returned by ${issue.memberName}.`,
+  });
 });
 
 app.use((request, response) => {

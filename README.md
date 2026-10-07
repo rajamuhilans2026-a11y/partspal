@@ -36,7 +36,9 @@ After the first deploy, copy the Netlify site origin into Render's `CLIENT_ORIGI
 - Inventory list with part name, category, total stock, and available stock
 - Search and category filtering backed by `GET /api/inventory`
 - Individual part checkout and return with server-side validation
+- Line Follower Kit checkout that validates all component stock before changing any count
+- Kit returns that restore all components once
 - Checkout records with member name, registration number, part, quantity, and due date
 - Express readiness endpoint at `GET /api/health`
 
-Inventory and checkout records use in-memory starter data in `server/index.js`. Issues, returns, and stock changes reset whenever the backend process restarts or is redeployed. Upcoming milestones are all-or-nothing kit issuing, member and overdue views, and finally the Recharts category chart.
+Inventory, kit definitions, and checkout records use in-memory starter data in `server/index.js`. Issues, returns, and stock changes reset whenever the backend process restarts or is redeployed. Member and overdue views are the next milestone; the Recharts category chart remains deferred until required workflows are complete.
