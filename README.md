@@ -35,6 +35,8 @@ After the first deploy, copy the Netlify site origin into Render's `CLIENT_ORIGI
 - Responsive Tailwind inventory dashboard
 - Inventory list with part name, category, total stock, and available stock
 - Search and category filtering backed by `GET /api/inventory`
+- Individual part checkout and return with server-side validation
+- Checkout records with member name, registration number, part, quantity, and due date
 - Express readiness endpoint at `GET /api/health`
 
-Inventory uses editable in-memory starter records in `server/index.js`. Inventory changes and checkouts will reset whenever the backend process restarts or is redeployed. Upcoming milestones are individual issues and returns, all-or-nothing kit issuing, member and overdue views, and finally the Recharts category chart.
+Inventory and checkout records use in-memory starter data in `server/index.js`. Issues, returns, and stock changes reset whenever the backend process restarts or is redeployed. Upcoming milestones are all-or-nothing kit issuing, member and overdue views, and finally the Recharts category chart.
