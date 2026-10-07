@@ -13,22 +13,32 @@ The API runs at `http://localhost:4000`; its readiness endpoint is `http://local
 
 ## Deploy
 
-Deploy the `server` workspace as a Node web service on Render:
+### Backend: Render Web Service
 
-- Root directory: repository root (`.`)
+- Connect this GitHub repository and select the `main` branch.
+- Root directory: repository root (`.`).
+- Runtime: Node 22 LTS (use the latest 22.x version available in Render).
 - Build command: `npm install`
 - Start command: `npm run start --workspace server`
-- Environment variable: `CLIENT_ORIGIN` = the deployed frontend origin, with no trailing slash (for example, `https://your-site.netlify.app`).
-- The service reads Render's `PORT` value automatically.
+- Health check path: `/api/health`
+- Environment variables:
+  - `CLIENT_ORIGIN` = the deployed Vercel site origin, with no path or trailing slash (for example, `https://partspal.vercel.app`).
+- Render provides `PORT` automatically; do not set it manually.
 
-Deploy the React app as a Netlify static site:
+### Frontend: Vercel
 
-- Base directory: repository root (leave blank / `.`).
-- Build command: `npm run build --workspace client`
-- Publish directory: `client/dist`
-- Environment variable: `VITE_API_URL` = the deployed Render backend URL, with no trailing slash (for example, `https://your-api.onrender.com`).
+- Import the same GitHub repository and select the `main` branch.
+- Framework preset: Vite.
+- Root directory: `client`.
+- Install command: `npm install` (or the default detected command).
+- Build command: `npm run build`
+- Output directory: `dist`
+- Environment variable:
+  - `VITE_API_URL` = the deployed Render service URL, with no trailing slash (for example, `https://partspal-api.onrender.com`).
 
-After the first deploy, copy the Netlify site origin into Render's `CLIENT_ORIGIN`, then copy the Render service URL into Netlify's `VITE_API_URL` and redeploy the frontend. Open the site and confirm its backend status says "API connected". Free backend services may take a little time to wake after being idle.
+Deployment order: deploy Vercel once to obtain its site URL; set that origin in Render as `CLIENT_ORIGIN` and deploy the API; then set the Render URL in Vercel as `VITE_API_URL` and redeploy the frontend. Confirm the dashboard loads inventory and displays the chart. Free Render instances may take a little time to wake after being idle.
+
+Only the two public service URLs belong in these settings; do not put private credentials in the frontend environment.
 
 ## Current scope
 
