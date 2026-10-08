@@ -53,7 +53,10 @@ async function apiRequest(path, options = {}) {
     throw new Error('The server returned an unreadable response.');
   }
   if (!response.ok) {
-    throw new Error(data.error || `Request failed (${response.status}).`);
+    const detailMessage = data.details && typeof data.details === 'object'
+      ? Object.values(data.details).filter((detail) => typeof detail === 'string').join(' ')
+      : '';
+    throw new Error([data.error, detailMessage].filter(Boolean).join(' ') || `Request failed (${response.status}).`);
   }
   return data;
 }
@@ -139,7 +142,7 @@ function StockLevel({ available, total }) {
   );
 }
 
-function InventoryTable({ items }) {
+function InventoryTable({ items, onEdit, onRestock }) {
   if (items.length === 0) {
     return (
       <div className="grid min-h-64 place-items-center px-5 text-center">
@@ -154,7 +157,7 @@ function InventoryTable({ items }) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[680px] text-left">
+      <table className="w-full min-w-[880px] text-left">
         <thead>
           <tr className="border-y border-line bg-soft/70 text-[10px] font-bold uppercase tracking-[.12em] text-muted">
             <th className="px-5 py-3.5 sm:px-6">Part</th>
@@ -162,6 +165,7 @@ function InventoryTable({ items }) {
             <th className="px-4 py-3.5 text-right">Total stock</th>
             <th className="px-4 py-3.5 text-right">Available</th>
             <th className="px-5 py-3.5 text-right sm:px-6">Status</th>
+            <th className="px-5 py-3.5 text-right sm:px-6">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
@@ -170,7 +174,10 @@ function InventoryTable({ items }) {
               <td className="px-5 py-4 sm:px-6">
                 <div className="flex items-center gap-3">
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-lime/20 text-green"><Icon name="box" className="h-[18px] w-[18px]" /></span>
-                  <span className="text-sm font-semibold">{item.name}</span>
+                  <span>
+                    <span className="text-sm font-semibold">{item.name}</span>
+                    {item.isExample && <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">Example</span>}
+                  </span>
                 </div>
               </td>
               <td className="px-4 py-4"><span className="rounded-md bg-soft px-2.5 py-1.5 text-xs font-medium text-muted">{item.category}</span></td>
@@ -180,6 +187,24 @@ function InventoryTable({ items }) {
                 <span className="text-xs text-muted"> / {item.totalStock}</span>
               </td>
               <td className="px-5 py-4 text-right sm:px-6"><StockLevel available={item.availableStock} total={item.totalStock} /></td>
+              <td className="px-5 py-4 text-right sm:px-6">
+                <div className="flex justify-end gap-2">
+                  <button
+                    className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink transition hover:border-green hover:text-green"
+                    onClick={() => onRestock(item)}
+                    type="button"
+                  >
+                    Restock
+                  </button>
+                  <button
+                    className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink transition hover:border-green hover:text-green"
+                    onClick={() => onEdit(item)}
+                    type="button"
+                  >
+                    Edit
+                  </button>
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -188,12 +213,150 @@ function InventoryTable({ items }) {
   );
 }
 
-function InventoryPage({ refreshToken }) {
+function InventoryFormDialog({ mode, onClose, onSaved }) {
+  const dialogRef = React.useRef(null);
+  const isRestock = mode.type === 'restock';
+  const isEdit = mode.type === 'edit';
+  const [name, setName] = useState(mode.part?.name ?? '');
+  const [category, setCategory] = useState(mode.part?.category ?? '');
+  const [quantity, setQuantity] = useState(isRestock ? '' : String(mode.part?.totalStock ?? ''));
+  const [formError, setFormError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const title = isRestock ? `Restock ${mode.part.name}` : isEdit ? `Edit ${mode.part.name}` : 'Add part';
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    dialog?.showModal();
+    return () => {
+      if (dialog?.open) dialog.close();
+    };
+  }, []);
+
+  async function submit(event) {
+    event.preventDefault();
+    setFormError('');
+    if (!isRestock && !name.trim()) {
+      setFormError('Enter a part name.');
+      return;
+    }
+    if (!isRestock && !category.trim()) {
+      setFormError('Enter a category.');
+      return;
+    }
+    if (!/^[1-9]\d*$/.test(quantity) || !Number.isSafeInteger(Number(quantity))) {
+      setFormError(isRestock
+        ? 'Enter a positive whole number of new units.'
+        : 'Enter total stock as a positive whole number.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const path = isRestock
+        ? `/api/inventory/${encodeURIComponent(mode.part.id)}/restock`
+        : isEdit
+          ? `/api/inventory/${encodeURIComponent(mode.part.id)}`
+          : '/api/inventory';
+      const body = isRestock
+        ? { quantity: Number(quantity) }
+        : { name, category, totalStock: Number(quantity) };
+      const data = await apiRequest(path, {
+        method: isRestock ? 'POST' : isEdit ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      onSaved(data.message, data.part);
+    } catch (requestError) {
+      setFormError(requestError.message || 'Could not save this inventory change.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <dialog
+      aria-labelledby="inventory-dialog-title"
+      className="w-[min(100%-2rem,30rem)] rounded-2xl border border-line bg-white p-0 text-ink shadow-2xl backdrop:bg-forest/40"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onClose={onClose}
+      ref={dialogRef}
+    >
+      <form className="space-y-4 p-5 sm:p-6" noValidate onSubmit={submit}>
+        <div>
+          <h2 className="font-display text-lg font-bold" id="inventory-dialog-title">{title}</h2>
+          <p className="mt-1 text-xs text-muted">
+            {isRestock
+              ? 'Restocking adds newly acquired units to total and available stock.'
+              : isEdit
+                ? 'Editing total stock preserves the units currently checked out.'
+                : 'New parts start with all owned units available.'}
+          </p>
+        </div>
+        {!isRestock && (
+          <>
+            <label className="block text-xs font-semibold text-ink">
+              Part name
+              <input
+                autoFocus
+                className="mt-1.5 h-10 w-full rounded-lg border border-line px-3 text-sm font-normal outline-none focus:border-green focus:ring-2 focus:ring-green/10"
+                maxLength={100}
+                onChange={(event) => setName(event.target.value)}
+                value={name}
+              />
+            </label>
+            <label className="block text-xs font-semibold text-ink">
+              Category
+              <input
+                className="mt-1.5 h-10 w-full rounded-lg border border-line px-3 text-sm font-normal outline-none focus:border-green focus:ring-2 focus:ring-green/10"
+                maxLength={60}
+                onChange={(event) => setCategory(event.target.value)}
+                value={category}
+              />
+            </label>
+          </>
+        )}
+        <label className="block text-xs font-semibold text-ink">
+          {isRestock ? 'New units to add' : 'Total units owned'}
+          <input
+            className="mt-1.5 h-10 w-full rounded-lg border border-line px-3 text-sm font-normal outline-none focus:border-green focus:ring-2 focus:ring-green/10"
+            inputMode="numeric"
+            onChange={(event) => setQuantity(event.target.value)}
+            value={quantity}
+          />
+        </label>
+        {formError && <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert">{formError}</p>}
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            className="h-10 rounded-lg border border-line px-4 text-sm font-semibold text-ink hover:border-green"
+            onClick={onClose}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className="h-10 rounded-lg bg-forest px-4 text-sm font-semibold text-white transition hover:bg-green disabled:cursor-wait disabled:opacity-55"
+            disabled={busy}
+            type="submit"
+          >
+            {busy ? 'Saving…' : isRestock ? 'Restock' : isEdit ? 'Save changes' : 'Add part'}
+          </button>
+        </div>
+      </form>
+    </dialog>
+  );
+}
+
+function InventoryPage({ refreshToken, onInventoryChange }) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All categories');
   const [inventoryData, setInventoryData] = useState(null);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
+  const [activeEditor, setActiveEditor] = useState(null);
+  const [feedback, setFeedback] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -243,6 +406,11 @@ function InventoryPage({ refreshToken }) {
         </span>
       </div>
 
+      <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <p className="font-semibold">Starter inventory is example data.</p>
+        <p className="mt-1 text-xs leading-5">Correct each example part to match your actual inventory. Manual changes are held in memory and reset when the backend restarts.</p>
+      </div>
+      {feedback && <div className="mb-4 rounded-lg border border-green/20 bg-green/5 px-4 py-3 text-sm text-green" role="status">{feedback}</div>}
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <SummaryCard label="Part types" value={inventoryData?.summary.partTypes ?? '—'} note="Unique components tracked" icon="box" />
         <SummaryCard label="Total stock" value={inventoryData?.summary.totalStock ?? '—'} note="Units owned by the lab" icon="layers" tone="lime" />
@@ -289,6 +457,16 @@ function InventoryPage({ refreshToken }) {
                 {inventoryData?.categories.map((value) => <option key={value}>{value}</option>)}
               </select>
             </label>
+            <button
+              className="h-10 rounded-lg bg-forest px-4 text-sm font-semibold text-white transition hover:bg-green"
+              onClick={() => {
+                setFeedback('');
+                setActiveEditor({ type: 'add' });
+              }}
+              type="button"
+            >
+              Add Part
+            </button>
           </div>
         </div>
 
@@ -304,7 +482,17 @@ function InventoryPage({ refreshToken }) {
             {status === 'error' ? `Unable to load inventory: ${error}` : 'Loading parts…'}
           </div>
         ) : (
-          <InventoryTable items={inventoryData.items} />
+          <InventoryTable
+            items={inventoryData.items}
+            onEdit={(part) => {
+              setFeedback('');
+              setActiveEditor({ type: 'edit', part });
+            }}
+            onRestock={(part) => {
+              setFeedback('');
+              setActiveEditor({ type: 'restock', part });
+            }}
+          />
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-soft/50 px-5 py-3.5 text-xs text-muted sm:px-6">
@@ -320,6 +508,25 @@ function InventoryPage({ refreshToken }) {
         <span>PartsPal · Robotics Club, VIT Chennai</span>
         <span>Inventory · Checkout · Kit tracking</span>
       </footer>
+      {activeEditor && (
+        <InventoryFormDialog
+          key={`${activeEditor.type}-${activeEditor.part?.id ?? 'new'}`}
+          mode={activeEditor}
+          onClose={() => setActiveEditor(null)}
+          onSaved={(message, part) => {
+            if (
+              activeEditor.type === 'edit'
+              && category === activeEditor.part.category
+              && activeEditor.part.category !== part.category
+            ) {
+              setCategory('All categories');
+            }
+            setActiveEditor(null);
+            setFeedback(message);
+            onInventoryChange();
+          }}
+        />
+      )}
     </>
   );
 }
@@ -338,7 +545,7 @@ function displayDate(value) {
   });
 }
 
-function IssueManager({ onInventoryChange }) {
+function IssueManager({ inventoryRefreshToken, onInventoryChange }) {
   const [parts, setParts] = useState([]);
   const [kits, setKits] = useState([]);
   const [issues, setIssues] = useState([]);
@@ -365,6 +572,7 @@ function IssueManager({ onInventoryChange }) {
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
     Promise.all([apiRequest('/api/inventory'), apiRequest('/api/kits')])
       .then(([inventoryData, kitData]) => {
         if (!active) return;
@@ -382,7 +590,7 @@ function IssueManager({ onInventoryChange }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [inventoryRefreshToken]);
 
   useEffect(() => {
     let active = true;
@@ -448,23 +656,13 @@ function IssueManager({ onInventoryChange }) {
             : { partId: form.partId, quantity: Number(form.quantity) }),
         }),
       });
-      setParts((current) => current.map((part) => (
-        data.issue.components.some((component) => component.partId === part.id)
-          ? {
-            ...part,
-            availableStock: part.availableStock - data.issue.components
-              .filter((component) => component.partId === part.id)
-              .reduce((total, component) => total + component.quantity, 0),
-          }
-          : part
-      )));
       setForm((current) => ({
         ...current,
         memberName: '',
         registrationNumber: '',
         dueDate: localDateAfter(7),
         partId: '',
-        kitId: '',
+        kitId: issueType === 'kit' ? form.kitId : '',
         quantity: '1',
       }));
       setFeedback({ type: 'success', message: data.message });
@@ -485,16 +683,6 @@ function IssueManager({ onInventoryChange }) {
       const data = await apiRequest(`/api/issues/${encodeURIComponent(issue.id)}/return`, {
         method: 'PATCH',
       });
-      setParts((current) => current.map((part) => (
-        data.issue.components.some((component) => component.partId === part.id)
-          ? {
-            ...part,
-            availableStock: part.availableStock + data.issue.components
-              .filter((component) => component.partId === part.id)
-              .reduce((total, component) => total + component.quantity, 0),
-          }
-          : part
-      )));
       setFeedback({ type: 'success', message: data.message });
       onInventoryChange();
       setIssueRefreshToken((current) => current + 1);
@@ -524,14 +712,13 @@ function IssueManager({ onInventoryChange }) {
           {feedback.message}
         </div>
       )}
-      {formError && <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{formError}</div>}
-
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(300px,.8fr)_minmax(0,1.5fr)]">
         <form className="scroll-mt-6 rounded-2xl border border-line bg-white p-5 shadow-card sm:p-6" id="issue-form" onSubmit={submitIssue}>
           <div className="mb-5">
             <h3 className="font-display text-base font-bold">Issue inventory</h3>
             <p className="mt-1 text-xs text-muted">Check out a single part or an assembled kit.</p>
           </div>
+          {formError && <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert">{formError}</div>}
           <div className="space-y-4">
             <div aria-label="Issue type" className="grid scroll-mt-6 grid-cols-2 rounded-lg bg-soft p-1" id="kit-details" role="group">
               {['part', 'kit'].map((type) => (
@@ -799,8 +986,14 @@ function App() {
               </div>
             </header>
             <main className="mx-auto max-w-[1320px] px-4 py-7 sm:px-7 sm:py-9 lg:px-10">
-              <InventoryPage refreshToken={refreshToken} />
-              <IssueManager onInventoryChange={() => setRefreshToken((current) => current + 1)} />
+              <InventoryPage
+                onInventoryChange={() => setRefreshToken((current) => current + 1)}
+                refreshToken={refreshToken}
+              />
+              <IssueManager
+                inventoryRefreshToken={refreshToken}
+                onInventoryChange={() => setRefreshToken((current) => current + 1)}
+              />
             </main>
         </div>
       </div>

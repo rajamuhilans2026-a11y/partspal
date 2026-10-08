@@ -35,7 +35,7 @@ const inventory = [
   { id: 'battery-9v', name: '9V Battery', category: 'Power', totalStock: 20, availableStock: 20 },
   { id: 'chassis-2wd', name: '2WD Robot Chassis', category: 'Chassis & Hardware', totalStock: 7, availableStock: 7 },
   { id: 'jumper-wire-kit', name: 'Jumper Wire Kit', category: 'Chassis & Hardware', totalStock: 15, availableStock: 15 },
-];
+].map((part) => ({ ...part, isExample: true }));
 const kits = [
   {
     id: 'line-follower-kit',
@@ -56,6 +56,20 @@ function todayUtcDate() {
 
 function isOverdue(issue, today = todayUtcDate()) {
   return issue.status === 'active' && issue.dueDate < today;
+}
+
+function validatePartDetails({ name, category, totalStock }) {
+  const errors = {};
+  if (typeof name !== 'string' || name.trim().length < 1 || name.trim().length > 100) {
+    errors.name = 'Enter a part name between 1 and 100 characters.';
+  }
+  if (typeof category !== 'string' || category.trim().length < 1 || category.trim().length > 60) {
+    errors.category = 'Enter a category between 1 and 60 characters.';
+  }
+  if (!Number.isSafeInteger(totalStock) || totalStock <= 0) {
+    errors.totalStock = 'Total stock must be a positive whole number.';
+  }
+  return errors;
 }
 
 app.use(cors({
@@ -119,6 +133,84 @@ app.get('/api/inventory', (request, response) => {
       totalStock: inventory.reduce((total, part) => total + part.totalStock, 0),
       availableStock: inventory.reduce((total, part) => total + part.availableStock, 0),
     },
+  });
+});
+
+app.post('/api/inventory', (request, response) => {
+  const { name, category, totalStock } = request.body ?? {};
+  const errors = validatePartDetails({ name, category, totalStock });
+  if (Object.keys(errors).length > 0) {
+    return response.status(400).json({ error: 'Check the part details and try again.', details: errors });
+  }
+
+  const baseId = name.trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'part';
+  let id = baseId;
+  let suffix = 2;
+  while (inventory.some((part) => part.id === id)) {
+    id = `${baseId}-${suffix}`;
+    suffix += 1;
+  }
+  const part = {
+    id,
+    name: name.trim(),
+    category: category.trim(),
+    totalStock,
+    availableStock: totalStock,
+    isExample: false,
+  };
+  inventory.push(part);
+  return response.status(201).json({ part, message: `${part.name} added with ${totalStock} units.` });
+});
+
+app.patch('/api/inventory/:id', (request, response) => {
+  const part = inventory.find((item) => item.id === request.params.id);
+  if (!part) {
+    return response.status(404).json({ error: 'The selected part does not exist.' });
+  }
+
+  const { name, category, totalStock } = request.body ?? {};
+  const errors = validatePartDetails({ name, category, totalStock });
+  const outstanding = part.totalStock - part.availableStock;
+  if (Number.isSafeInteger(totalStock) && totalStock < outstanding) {
+    errors.totalStock = `Total stock cannot be less than ${outstanding} outstanding ${outstanding === 1 ? 'unit' : 'units'}.`;
+  }
+  if (Object.keys(errors).length > 0) {
+    return response.status(400).json({ error: 'Check the part details and try again.', details: errors });
+  }
+
+  part.name = name.trim();
+  part.category = category.trim();
+  part.totalStock = totalStock;
+  part.availableStock = totalStock - outstanding;
+  part.isExample = false;
+  return response.json({
+    part,
+    message: `${part.name} updated: ${part.totalStock} total, ${part.availableStock} available.`,
+  });
+});
+
+app.post('/api/inventory/:id/restock', (request, response) => {
+  const part = inventory.find((item) => item.id === request.params.id);
+  if (!part) {
+    return response.status(404).json({ error: 'The selected part does not exist.' });
+  }
+
+  const { quantity } = request.body ?? {};
+  if (!Number.isSafeInteger(quantity) || quantity <= 0) {
+    return response.status(400).json({
+      error: 'Restock quantity must be a positive whole number.',
+      details: { quantity: 'Enter a positive whole number of new units.' },
+    });
+  }
+  if (!Number.isSafeInteger(part.totalStock + quantity) || !Number.isSafeInteger(part.availableStock + quantity)) {
+    return response.status(400).json({ error: 'Restocking this quantity would exceed the supported stock limit.' });
+  }
+
+  part.totalStock += quantity;
+  part.availableStock += quantity;
+  return response.json({
+    part,
+    message: `${part.name} restocked: ${part.totalStock} total, ${part.availableStock} available.`,
   });
 });
 
@@ -237,12 +329,15 @@ app.post('/api/issues', (request, response) => {
     }
     const unavailable = components.filter((component) => component.part.availableStock < component.quantity);
     if (unavailable.length > 0) {
-      const shortages = unavailable.map((component) => {
-        const available = component.part.availableStock;
-        return `${component.partName}: needs ${component.quantity}, only ${available} available`;
-      });
+      const shortages = unavailable.map((component) => ({
+        partId: component.partId,
+        partName: component.partName,
+        requiredQuantity: component.quantity,
+        availableQuantity: component.part.availableStock,
+      }));
       return response.status(409).json({
-        error: `Cannot issue ${kit.name}. ${shortages.join('; ')}. No stock was changed.`,
+        error: `${shortages.map((shortage) => `${shortage.partName}: ${shortage.requiredQuantity} required, ${shortage.availableQuantity} available.`).join(' ')} No kit stock was changed.`,
+        shortages,
       });
     }
   } else {

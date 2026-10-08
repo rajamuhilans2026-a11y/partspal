@@ -51,13 +51,22 @@ The browser calls `${VITE_API_URL}/api/inventory` and the other `/api/...` endpo
 
 - Responsive inventory dashboard with category stock charts and accessible chart data table
 - Inventory search and category filtering
+- Manual inventory management: add parts, edit names/categories/total units, and restock newly acquired units
 - Server-validated individual part checkout and one-time return
-- Line Follower Kit details, issue, and return; the API checks every component before changing stock and rejects shortages without changing any component
+- Line Follower Kit details, issue, and return; the API checks every component before changing stock and reports each shortage without changing any component
 - Checkout history searchable by member name or registration number, with active, overdue, and returned filters
 - Readiness endpoint at `GET /api/health`
 - Keyboard-accessible controls with visible focus states
 
-Inventory, kit definitions, and checkout records are currently held in backend process memory. Stock changes, issues, and returns reset whenever the backend restarts or is redeployed; this project does not currently persist data in a database. Overdue status compares date-only due dates against the current UTC date.
+The prefilled starter inventory quantities are example data, not verified lab counts. Use **Edit** to enter the actual part name, category, and total units owned; the app preserves currently issued units when the total changes. **Add Part** creates a part with all entered units available. **Restock** records newly acquired units by increasing both total and available stock; it is different from **Return**, which makes previously issued units available again.
+
+Inventory edits and additions are validated by the API. The inventory endpoints are:
+
+- `POST /api/inventory` — add a part with `name`, `category`, and positive whole-number `totalStock`; all units start available.
+- `PATCH /api/inventory/:id` — edit a part's `name`, `category`, and `totalStock`; the new total cannot be lower than the outstanding (issued) quantity, and available stock is recalculated to preserve those issues.
+- `POST /api/inventory/:id/restock` — add a positive whole-number `quantity` of new units to both total and available stock.
+
+Inventory, kit definitions, and checkout records are currently held in backend process memory. Manual inventory changes, stock restocks, issues, and returns reset whenever the backend restarts or is redeployed; this project does not currently persist data in a database. Overdue status compares date-only due dates against the current UTC date.
 
 ## How I used AI
 
