@@ -51,9 +51,6 @@ The API runs at `http://localhost:4000`; its health endpoint is `http://localhos
 
 Render's `CLIENT_ORIGIN` should be `https://partspal-taupe.vercel.app`. If the Vercel Production domain changes, update that value in Render and redeploy the backend. Vercel deployment-specific URLs change between builds; keep this stable Production domain in the README.
 
-## Screenshots
-
-Add one desktop and one mobile screenshot of the working Production app here before submission.
 
 ## Data and limitations
 
