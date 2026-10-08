@@ -5,7 +5,7 @@ PartsPal is a responsive robotics-lab inventory and checkout workspace built wit
 ## Live services
 
 - **Backend:** [https://partspal.onrender.com](https://partspal.onrender.com) — verified healthy at `/api/health`; `/api/inventory` returns live inventory JSON.
-- **Latest Production frontend deployment:** [https://partspal-nexq851lf-nothing-72fe.vercel.app](https://partspal-nexq851lf-nothing-72fe.vercel.app) — GitHub's Vercel deployment record reports Production and success for this deployment. It is an immutable deployment URL, not a stable project domain; Vercel access protection prevented an anonymous browser check during this update. Use the stable Production domain listed in the Vercel project's **Settings → Domains** for Render CORS.
+- **Most recent Production URL exposed by GitHub's deployment records:** [https://partspal-nexq851lf-nothing-72fe.vercel.app](https://partspal-nexq851lf-nothing-72fe.vercel.app) — GitHub records Production and success for commit `c331d4e`. The pushed `main` commit `b84394a` has a successful Vercel status check, but GitHub has not exposed a new Production deployment URL for it. This is an immutable deployment URL, not a stable project domain; Vercel access protection prevented an anonymous browser check. Copy the current stable Production domain from the Vercel project's **Settings → Domains** before setting Render CORS.
 
 ## Run locally
 
