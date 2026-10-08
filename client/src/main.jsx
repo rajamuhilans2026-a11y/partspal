@@ -34,7 +34,7 @@ const apiUrl = (configuredApiUrl || (import.meta.env.DEV ? 'http://localhost:400
 
 async function apiRequest(path, options = {}) {
   if (!apiUrl) {
-    throw new Error('The PartsPal API address is not configured. Set VITE_API_URL to https://partspal.onrender.com in Vercel, then redeploy the Production build.');
+    throw new Error('The RoboRack API address is not configured. Set VITE_API_URL to https://partspal.onrender.com in Vercel, then redeploy the Production build.');
   }
 
   let response;
@@ -90,7 +90,7 @@ function Brand() {
         <Icon name="kits" className="h-6 w-6" />
       </div>
       <div>
-        <p className="font-display text-lg font-bold leading-tight tracking-tight">PartsPal</p>
+        <p className="font-display text-lg font-bold leading-tight tracking-tight">RoboRack</p>
         <p className="mt-0.5 text-[11px] text-white/55">Robotics lab inventory</p>
       </div>
     </div>
@@ -499,13 +499,13 @@ function InventoryPage({ refreshToken, onInventoryChange }) {
           <span>Available stock reflects parts currently on the shelf.</span>
           <span className="inline-flex items-center gap-1.5" role="status">
             <span className={`h-1.5 w-1.5 rounded-full ${status === 'ready' || status === 'refreshing' ? 'bg-green' : status === 'error' ? 'bg-rose-500' : 'animate-pulse bg-amber-400'}`} />
-            {status === 'ready' || status === 'refreshing' ? 'Connected to PartsPal API' : status === 'error' ? 'API connection needs attention' : 'Connecting to PartsPal API'}
+            {status === 'ready' || status === 'refreshing' ? 'Connected to RoboRack API' : status === 'error' ? 'API connection needs attention' : 'Connecting to RoboRack API'}
           </span>
         </div>
       </section>
 
       <footer className="mt-8 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-        <span>PartsPal · Robotics Club, VIT Chennai</span>
+        <span>RoboRack · Robotics Club, VIT Chennai</span>
         <span>Inventory · Checkout · Kit tracking</span>
       </footer>
       {activeEditor && (
@@ -977,7 +977,7 @@ function App() {
 
         <div className="min-w-0 flex-1">
             <header className="flex min-h-[68px] items-center justify-between gap-3 border-b border-line/90 bg-white/75 px-5 backdrop-blur sm:px-8 lg:px-10">
-              <p className="text-xs font-medium text-muted sm:text-sm">PartsPal <span className="mx-2 text-slate-300">/</span><span className="text-ink">Lab operations</span></p>
+              <p className="text-xs font-medium text-muted sm:text-sm">RoboRack <span className="mx-2 text-slate-300">/</span><span className="text-ink">Lab operations</span></p>
               <div className="flex items-center gap-2.5 rounded-full border border-line bg-white px-3 py-2 shadow-sm">
                 <span aria-hidden="true" className="relative grid h-2.5 w-2.5 place-items-center rounded-full bg-green">
                   <span className="absolute h-2.5 w-2.5 animate-ping rounded-full bg-green/35" />

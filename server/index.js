@@ -83,7 +83,7 @@ app.get('/api/health', (_request, response) => {
   response.json({
     status: 'ok',
     message: 'Backend is connected and ready.',
-    app: 'PartsPal',
+    app: 'RoboRack',
   });
 });
 
@@ -448,5 +448,5 @@ app.use((error, _request, response, _next) => {
 });
 
 app.listen(port, () => {
-  console.log(`PartsPal API listening on port ${port}`);
+  console.log(`RoboRack API listening on port ${port}`);
 });
