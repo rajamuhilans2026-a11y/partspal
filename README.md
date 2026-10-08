@@ -5,7 +5,7 @@ PartsPal is a responsive robotics-lab inventory and checkout workspace built wit
 ## Live services
 
 - **Backend:** [https://partspal.onrender.com](https://partspal.onrender.com) — verified healthy at `/api/health`; `/api/inventory` returns live inventory JSON.
-- **Most recent Production URL exposed by GitHub's deployment records:** [https://partspal-nexq851lf-nothing-72fe.vercel.app](https://partspal-nexq851lf-nothing-72fe.vercel.app) — GitHub records Production and success for commit `c331d4e`. The pushed `main` commit `b84394a` has a successful Vercel status check, but GitHub has not exposed a new Production deployment URL for it. This is an immutable deployment URL, not a stable project domain; Vercel access protection prevented an anonymous browser check. Copy the current stable Production domain from the Vercel project's **Settings → Domains** before setting Render CORS.
+- **Frontend deployment history:** [GitHub Production deployments](https://github.com/rajamuhilans2026-a11y/partspal/deployments/production) lists Vercel's successful Production target for each build; those generated URLs change with deployments. The latest target verified during this update was [https://partspal-apyvor1y8-nothing-72fe.vercel.app](https://partspal-apyvor1y8-nothing-72fe.vercel.app), which rendered the redesigned app but could not load API data because Render CORS still had an older origin. The candidate URL `https://partspal.vercel.app` was tested and currently shows Vercel's “Deployment temporarily paused” page. The stable active Production domain must be confirmed in Vercel **Settings → Domains**; do not use an immutable deployment URL as a permanent alias.
 
 ## Run locally
 
@@ -26,10 +26,10 @@ The API runs at `http://localhost:4000`; its readiness endpoint is `http://local
 - Build command: `npm install`
 - Start command: `npm run start --workspace server`
 - Health check path: `/api/health`
-- Set `CLIENT_ORIGIN` to the exact stable Vercel Production origin copied from **Vercel → Project → Settings → Domains**. Include only the scheme and host, with no path or trailing slash. For the latest Production deployment URL recorded by GitHub at the time of writing, the exact value is `https://partspal-nexq851lf-nothing-72fe.vercel.app`; that URL is deployment-specific, so use the stable project domain instead for ongoing deployments. For multiple explicitly trusted frontend origins, separate exact origins with commas; wildcard origins are not supported.
+- Set `CLIENT_ORIGIN` to the exact stable Vercel Production origin copied from **Vercel → Project → Settings → Domains**. Include only the scheme and host, with no path or trailing slash. The deployment-specific URL verified during this update is `https://partspal-apyvor1y8-nothing-72fe.vercel.app`; use that exact value only when allowing that particular build. For multiple explicitly trusted frontend origins, separate exact origins with commas; wildcard origins are not supported.
 - Render provides `PORT` automatically; do not set it manually.
 
-**Current deployment evidence:** Render's CORS response currently identifies `https://partspal-ea5ifq71l-nothing-72fe.vercel.app`, an older deployment-specific origin. GitHub's latest successful Production deployment record identifies `https://partspal-nexq851lf-nothing-72fe.vercel.app`. A request from the latest deployment URL receives the old origin in `Access-Control-Allow-Origin`, which browsers reject. These are different immutable deployment URLs; neither should be treated as the stable project domain. After confirming the stable Production domain in Vercel, set `CLIENT_ORIGIN` to that exact value and redeploy the Render service.
+**Current deployment evidence:** Render's CORS response identifies `https://partspal-ea5ifq71l-nothing-72fe.vercel.app`, an older deployment-specific origin. A request from the latest confirmed Production deployment receives no `Access-Control-Allow-Origin` header, which browsers reject. These generated deployment URLs are different; neither should be treated as the stable project domain. After confirming the stable Production domain in Vercel, set `CLIENT_ORIGIN` to that exact value and redeploy the Render service.
 
 ### Frontend: Vercel
 
