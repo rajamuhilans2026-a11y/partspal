@@ -4,6 +4,22 @@ import { randomUUID } from 'node:crypto';
 
 const app = express();
 const port = Number(process.env.PORT) || 4000;
+const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+for (const origin of allowedOrigins) {
+  let parsedOrigin;
+  try {
+    parsedOrigin = new URL(origin);
+  } catch {
+    throw new Error(`CLIENT_ORIGIN must contain valid absolute origins; received "${origin}".`);
+  }
+  if (parsedOrigin.origin !== origin) {
+    throw new Error(`CLIENT_ORIGIN values must be origins without paths or trailing slashes; received "${origin}".`);
+  }
+}
 
 const inventory = [
   { id: 'arduino-uno', name: 'Arduino Uno', category: 'Microcontrollers', totalStock: 12, availableStock: 12 },
@@ -42,7 +58,11 @@ function isOverdue(issue, today = todayUtcDate()) {
   return issue.status === 'active' && issue.dueDate < today;
 }
 
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || '*' }));
+app.use(cors({
+  origin(origin, callback) {
+    callback(null, !origin || allowedOrigins.includes(origin));
+  },
+}));
 app.use(express.json({ limit: '16kb' }));
 
 app.get('/api/health', (_request, response) => {

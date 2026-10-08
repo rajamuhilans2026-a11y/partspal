@@ -1,20 +1,51 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import {
+  ArrowLeftRight,
+  ArrowUpRight,
+  Box,
+  Boxes,
+  CalendarDays,
+  Cpu,
+  Filter,
+  History,
+  LayoutDashboard,
+  Layers3,
+  ListFilter,
+  RotateCcw,
+  Search,
+  Users,
+} from 'lucide-react';
 import './style.css';
 
 const CategoryStockChart = lazy(() => import('./CategoryStockChart.jsx'));
 
 const navigation = [
-  { label: 'Overview', icon: 'overview' },
-  { label: 'Inventory', icon: 'inventory', active: true },
-  { label: 'Issues & kits', icon: 'issues' },
-  { label: 'Members', icon: 'members', upcoming: true },
+  { label: 'Overview', icon: 'overview', href: '#overview' },
+  { label: 'Inventory', icon: 'inventory', href: '#inventory' },
+  { label: 'Issue & return', icon: 'issues', href: '#issue-form' },
+  { label: 'Checkout history', icon: 'history', href: '#checkout-history' },
+  { label: 'Members', icon: 'members', href: '#member-search' },
+  { label: 'Kit details', icon: 'kits', href: '#kit-details' },
 ];
 
-const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:4000').replace(/\/$/, '');
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+const apiUrl = (configuredApiUrl || (import.meta.env.DEV ? 'http://localhost:4000' : '')).replace(/\/+$/, '');
 
 async function apiRequest(path, options = {}) {
-  const response = await fetch(`${apiUrl}${path}`, options);
+  if (!apiUrl) {
+    throw new Error('The PartsPal API address is not configured. Set VITE_API_URL to https://partspal.onrender.com in Vercel, then redeploy the Production build.');
+  }
+
+  let response;
+  try {
+    response = await fetch(`${apiUrl}${path}`, options);
+  } catch (error) {
+    if (error.name === 'AbortError') throw error;
+    const origin = window.location.origin;
+    throw new Error(`Could not connect to ${apiUrl}. Check VITE_API_URL, confirm Render CLIENT_ORIGIN allows ${origin} exactly (without a trailing slash), and check whether the Render backend is sleeping or unavailable.`);
+  }
+
   let data;
   try {
     data = await response.json();
@@ -28,44 +59,36 @@ async function apiRequest(path, options = {}) {
 }
 
 function Icon({ name, className = 'h-5 w-5' }) {
-  const paths = {
-    overview: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
-    inventory: <><path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5M3 16l9 5 9-5" /></>,
-    issues: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M7 3v4m10-4v4M3 10h18m-12 4h6m-6 3h4" /></>,
-    members: <><circle cx="9" cy="8" r="3" /><path d="M3 20v-1a6 6 0 0 1 12 0v1H3Zm13-12a3 3 0 0 1 0 6m2 1a5 5 0 0 1 3 5" /></>,
-    search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4.5 4.5" /></>,
-    box: <><path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="M3 8v8l9 5 9-5V8m-9 5v8" /></>,
-    layers: <><path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5m-18 4 9 5 9-5" /></>,
-    arrow: <><path d="M7 17 17 7M7 7h10v10" /></>,
-    filter: <><path d="M4 7h16M7 12h10m-7 5h4" /><circle cx="8" cy="7" r="1" fill="currentColor" /><circle cx="15" cy="12" r="1" fill="currentColor" /></>,
-    return: <><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8" /><path d="M3 3v5h5m4-1v5l3 2" /></>,
+  const icons = {
+    overview: LayoutDashboard,
+    inventory: Boxes,
+    issues: ArrowLeftRight,
+    history: History,
+    members: Users,
+    kits: Cpu,
+    search: Search,
+    box: Box,
+    layers: Layers3,
+    arrow: ArrowUpRight,
+    filter: Filter,
+    return: RotateCcw,
+    calendar: CalendarDays,
+    listFilter: ListFilter,
   };
+  const IconComponent = icons[name] || Box;
 
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.7"
-      viewBox="0 0 24 24"
-    >
-      {paths[name]}
-    </svg>
-  );
+  return <IconComponent aria-hidden="true" className={className} strokeWidth={1.8} />;
 }
 
 function Brand() {
   return (
     <div className="flex items-center gap-3 px-1">
-      <div className="grid h-10 w-10 place-items-center rounded-xl bg-lime text-forest">
-        <Icon name="box" className="h-6 w-6" />
+      <div className="grid h-11 w-11 place-items-center rounded-2xl bg-lime text-forest shadow-[0_5px_18px_rgba(201,237,117,.16)]">
+        <Icon name="kits" className="h-6 w-6" />
       </div>
       <div>
         <p className="font-display text-lg font-bold leading-tight tracking-tight">PartsPal</p>
-        <p className="text-xs text-white/55">Robotics lab</p>
+        <p className="mt-0.5 text-[11px] text-white/55">Robotics lab inventory</p>
       </div>
     </div>
   );
@@ -73,19 +96,12 @@ function Brand() {
 
 function NavigationItem({ item }) {
   const baseClass = 'flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors';
-  const colorClass = item.active ? 'bg-white/10 text-white' : 'text-white/55';
 
   return (
-    <div
-      aria-current={item.active ? 'page' : undefined}
-      aria-disabled={item.upcoming ? 'true' : undefined}
-      className={`${baseClass} ${colorClass}`}
-      title={item.upcoming ? 'Coming in a later milestone' : undefined}
-    >
+    <a className={`${baseClass} text-white/65 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime`} href={item.href}>
       <Icon name={item.icon} className="h-[18px] w-[18px]" />
       <span>{item.label}</span>
-      {item.upcoming && <span className="ml-auto hidden text-[10px] uppercase tracking-wider text-white/35 sm:block lg:hidden xl:block">Soon</span>}
-    </div>
+    </a>
   );
 }
 
@@ -93,13 +109,13 @@ function SummaryCard({ label, value, note, icon, tone = 'green' }) {
   const toneClass = tone === 'lime' ? 'bg-lime/25 text-forest' : 'bg-green/10 text-green';
 
   return (
-    <article className="rounded-2xl border border-line bg-white p-5 shadow-card">
+    <article className="group rounded-2xl border border-line/90 bg-white p-5 shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-lg">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-muted">{label}</p>
           <p className="mt-2 font-display text-3xl font-bold tracking-tight">{value}</p>
         </div>
-        <span className={`grid h-10 w-10 place-items-center rounded-xl ${toneClass}`}>
+        <span className={`grid h-11 w-11 place-items-center rounded-2xl transition-transform duration-200 group-hover:scale-105 ${toneClass}`}>
           <Icon name={icon} className="h-5 w-5" />
         </span>
       </div>
@@ -186,14 +202,11 @@ function InventoryPage({ refreshToken }) {
     if (search.trim()) params.set('search', search.trim());
     if (category !== 'All categories') params.set('category', category);
     const query = params.toString();
-    const endpoint = `${apiUrl}/api/inventory${query ? `?${query}` : ''}`;
 
     setStatus((current) => current === 'loading' ? 'loading' : 'refreshing');
     setError('');
-    fetch(endpoint, { signal: controller.signal })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+    apiRequest(`/api/inventory${query ? `?${query}` : ''}`, { signal: controller.signal })
+      .then((data) => {
         if (!Array.isArray(data.items) || !Array.isArray(data.categories) || !Array.isArray(data.categoryStock) || !data.summary) {
           throw new Error('The inventory response was not in the expected format.');
         }
@@ -219,7 +232,7 @@ function InventoryPage({ refreshToken }) {
   return (
     <>
       <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
-        <div>
+        <div id="overview" className="scroll-mt-6">
           <p className="mb-2 text-xs font-bold uppercase tracking-[.14em] text-green">LAB WORKSPACE</p>
           <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">Parts inventory</h1>
           <p className="mt-2 text-sm text-muted sm:text-base">A live view of the components available in your robotics lab.</p>
@@ -245,7 +258,7 @@ function InventoryPage({ refreshToken }) {
         <CategoryStockChart data={inventoryData?.categoryStock ?? []} status={status} error={error} />
       </Suspense>
 
-      <section aria-labelledby="inventory-heading" className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
+      <section aria-labelledby="inventory-heading" className="scroll-mt-6 overflow-hidden rounded-2xl border border-line bg-white shadow-card" id="inventory">
         <div className="flex flex-wrap items-center justify-between gap-4 p-5 sm:px-6 sm:py-5">
           <div>
             <h2 id="inventory-heading" className="font-display text-base font-bold">All parts</h2>
@@ -296,13 +309,16 @@ function InventoryPage({ refreshToken }) {
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-soft/50 px-5 py-3.5 text-xs text-muted sm:px-6">
           <span>Available stock reflects parts currently on the shelf.</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-green" />Live from PartsPal API</span>
+          <span className="inline-flex items-center gap-1.5" role="status">
+            <span className={`h-1.5 w-1.5 rounded-full ${status === 'ready' || status === 'refreshing' ? 'bg-green' : status === 'error' ? 'bg-rose-500' : 'animate-pulse bg-amber-400'}`} />
+            {status === 'ready' || status === 'refreshing' ? 'Connected to PartsPal API' : status === 'error' ? 'API connection needs attention' : 'Connecting to PartsPal API'}
+          </span>
         </div>
       </section>
 
       <footer className="mt-8 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
         <span>PartsPal · Robotics Club, VIT Chennai</span>
-        <span>Core workflows · Milestone 04 / 06</span>
+        <span>Inventory · Checkout · Kit tracking</span>
       </footer>
     </>
   );
@@ -511,13 +527,13 @@ function IssueManager({ onInventoryChange }) {
       {formError && <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{formError}</div>}
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(300px,.8fr)_minmax(0,1.5fr)]">
-        <form className="rounded-2xl border border-line bg-white p-5 shadow-card sm:p-6" onSubmit={submitIssue}>
+        <form className="scroll-mt-6 rounded-2xl border border-line bg-white p-5 shadow-card sm:p-6" id="issue-form" onSubmit={submitIssue}>
           <div className="mb-5">
             <h3 className="font-display text-base font-bold">Issue inventory</h3>
             <p className="mt-1 text-xs text-muted">Check out a single part or an assembled kit.</p>
           </div>
           <div className="space-y-4">
-            <div aria-label="Issue type" className="grid grid-cols-2 rounded-lg bg-soft p-1" role="group">
+            <div aria-label="Issue type" className="grid scroll-mt-6 grid-cols-2 rounded-lg bg-soft p-1" id="kit-details" role="group">
               {['part', 'kit'].map((type) => (
                 <button
                   aria-pressed={issueType === type}
@@ -652,7 +668,7 @@ function IssueManager({ onInventoryChange }) {
           </div>
         </form>
 
-        <section className="overflow-hidden rounded-2xl border border-line bg-white shadow-card" aria-labelledby="current-issues-heading">
+        <section className="scroll-mt-6 overflow-hidden rounded-2xl border border-line bg-white shadow-card" aria-labelledby="current-issues-heading" id="checkout-history">
           <div className="flex items-center justify-between gap-3 p-5 sm:px-6 sm:py-5">
             <div>
               <h3 id="current-issues-heading" className="font-display text-base font-bold">Who has what</h3>
@@ -661,7 +677,7 @@ function IssueManager({ onInventoryChange }) {
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-lime/25 text-green"><Icon name="return" className="h-[18px] w-[18px]" /></span>
           </div>
           <div className="grid gap-2 border-y border-line bg-soft/50 p-4 sm:grid-cols-[minmax(0,1fr)_150px] sm:px-6">
-            <label className="relative block">
+            <label className="relative block" id="member-search">
               <span className="sr-only">Search issues by member name or registration number</span>
               <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
@@ -756,34 +772,36 @@ function App() {
 
   return (
     <div className="min-h-screen bg-paper text-ink">
-      <div className="mx-auto min-h-screen max-w-[1600px] lg:flex">
-        <aside className="bg-forest text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[250px] lg:shrink-0 lg:flex-col">
+      <div className="mx-auto min-h-screen max-w-[1680px] lg:flex">
+          <aside className="z-20 bg-forest text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[268px] lg:shrink-0 lg:flex-col">
           <div className="flex items-center justify-between px-5 py-5 lg:block lg:px-6 lg:py-7">
             <Brand />
-            <span className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/60 lg:hidden">VIT Chennai</span>
+              <span className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/60 lg:hidden">Robotics club</span>
           </div>
           <nav aria-label="Main navigation" className="flex gap-1 overflow-x-auto px-4 pb-4 lg:flex-col lg:overflow-visible lg:px-4 lg:py-5">
-            <p className="hidden px-3 pb-2 text-[10px] font-bold uppercase tracking-[.16em] text-white/35 lg:block">Workspace</p>
+              <p className="hidden px-3 pb-2 text-[10px] font-bold uppercase tracking-[.16em] text-white/35 lg:block">Lab workspace</p>
             {navigation.map((item) => <NavigationItem key={item.label} item={item} />)}
           </nav>
           <div className="mt-auto hidden border-t border-white/10 px-6 py-5 lg:block">
-            <p className="text-xs font-semibold text-white/75">Robotics Club</p>
-            <p className="mt-1 text-xs text-white/40">VIT Chennai · Web Dev Round 2</p>
+              <p className="text-xs font-semibold text-white/75">Robotics Club · VIT Chennai</p>
+              <p className="mt-2 text-[11px] leading-5 text-white/45">Inventory and checkout data live in backend memory and reset on restart.</p>
           </div>
         </aside>
 
         <div className="min-w-0 flex-1">
-          <header className="flex h-[66px] items-center justify-between border-b border-line bg-white/80 px-5 sm:px-8 lg:px-10">
-            <p className="text-sm font-medium text-muted">Workspace <span className="mx-2 text-slate-300">/</span><span className="text-ink">Inventory</span></p>
-            <div className="flex items-center gap-2 rounded-full bg-white px-3 py-1.5 shadow-sm ring-1 ring-line">
-              <span className="grid h-6 w-6 place-items-center rounded-full bg-lime/30 text-[10px] font-bold text-forest">RC</span>
-              <span className="hidden text-xs font-semibold text-ink sm:inline">Robotics Club</span>
-            </div>
-          </header>
-          <main className="mx-auto max-w-[1200px] px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
-            <InventoryPage refreshToken={refreshToken} />
-            <IssueManager onInventoryChange={() => setRefreshToken((current) => current + 1)} />
-          </main>
+            <header className="flex min-h-[68px] items-center justify-between gap-3 border-b border-line/90 bg-white/75 px-5 backdrop-blur sm:px-8 lg:px-10">
+              <p className="text-xs font-medium text-muted sm:text-sm">PartsPal <span className="mx-2 text-slate-300">/</span><span className="text-ink">Lab operations</span></p>
+              <div className="flex items-center gap-2.5 rounded-full border border-line bg-white px-3 py-2 shadow-sm">
+                <span aria-hidden="true" className="relative grid h-2.5 w-2.5 place-items-center rounded-full bg-green">
+                  <span className="absolute h-2.5 w-2.5 animate-ping rounded-full bg-green/35" />
+                </span>
+                <span className="text-[11px] font-semibold text-ink sm:text-xs">Live workspace</span>
+              </div>
+            </header>
+            <main className="mx-auto max-w-[1320px] px-4 py-7 sm:px-7 sm:py-9 lg:px-10">
+              <InventoryPage refreshToken={refreshToken} />
+              <IssueManager onInventoryChange={() => setRefreshToken((current) => current + 1)} />
+            </main>
         </div>
       </div>
     </div>

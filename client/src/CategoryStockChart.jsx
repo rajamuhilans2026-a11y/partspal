@@ -73,7 +73,7 @@ export default function CategoryStockChart({ data, status, error }) {
                   iconSize={8}
                   wrapperStyle={{ fontSize: 11, color: '#64736b' }}
                 />
-                <Bar dataKey="totalStock" fill="#18382b" name="Total stock" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="totalStock" fill="#17363a" name="Total stock" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="availableStock" fill="#a7cf56" name="Available stock" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>

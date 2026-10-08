@@ -20,14 +20,66 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  background:
+    radial-gradient(ellipse at 88% 0%, rgba(201, 237, 117, 0.12), transparent 30rem),
+    #f6f7f3;
 }
 
 button,
+input,
+select,
 a {
   -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+a,
+input,
+select,
+summary {
+  touch-action: manipulation;
+}
+
+a,
+button,
+input,
+select,
+summary {
+  transition-timing-function: cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 3px solid rgba(57, 123, 82, 0.55);
+  outline-offset: 2px;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 1rem;
 }
 
 ::selection {
   color: #17382a;
   background: #dcf5ad;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
